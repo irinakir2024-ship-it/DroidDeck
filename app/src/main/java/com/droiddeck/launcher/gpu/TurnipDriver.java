@@ -340,6 +340,12 @@ public final class TurnipDriver {
         }
         String model = gpuModel();
         Log.i(TAG, "gpu model: " + (model == null ? "unknown" : model));
+        // Mali: adrenotools cannot load an Adreno Turnip here, so the compositor uses the system
+        // Vulkan driver (the vendor's own bionic Mali blob) instead of one of the bundled builds.
+        if (model == null && isMaliDevice()) {
+            Log.i(TAG, "Mali GPU: falling back to the system Vulkan driver");
+            return null;
+        }
         if (model != null) {
             // "Adreno750", "adreno_830" - the generation is the first digit of the three.
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d)\\d\\d").matcher(model);
@@ -351,6 +357,12 @@ public final class TurnipDriver {
         }
         // Nothing to go on: Android 16 shipped with the 8 Elite, so treat a new device as 8xx.
         return android.os.Build.VERSION.SDK_INT >= 36 ? DRIVER_A8XX : DRIVER_A7XX;
+    }
+
+    /** True when this is a Mali device (MTK/Exynos), where no bundled Adreno Turnip can load. */
+    private static boolean isMaliDevice() {
+        return new File("/vendor/lib64/egl/libGLES_mali.so").exists()
+                || new File("/vendor/lib64/hw/vulkan.mali.so").exists();
     }
 
     /** KGSL names the GPU here, and this file is world-readable where /dev/kgsl-3d0 is not. */

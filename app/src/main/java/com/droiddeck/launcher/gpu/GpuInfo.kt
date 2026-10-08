@@ -35,6 +35,8 @@ data class GpuInfo(
         A6XX("Adreno 6xx"),
         /** An Adreno whose model KGSL does not give: treated as the newest family it could be. */
         ADRENO_UNKNOWN("Adreno"),
+        /** A Mali GPU (MTK/Exynos). This fork runs it on the runtime's software Vulkan driver. */
+        MALI("Mali"),
         NOT_ADRENO("Not an Adreno GPU");
 
         /** [label] in the app's language: the Adreno families are names, the rest is words. */
@@ -46,6 +48,7 @@ data class GpuInfo(
     val support: Support
         get() = when {
             family == Family.NOT_ADRENO -> Support.UNSUPPORTED
+            family == Family.MALI -> Support.UNTESTED
             family == Family.A6XX && model == 650 -> Support.TESTED
             family == Family.A8XX -> Support.TESTED
             family == Family.A7XX && model >= 725 -> Support.TESTED
@@ -56,7 +59,8 @@ data class GpuInfo(
     val supportText: String
         get() = when (support) {
             Support.TESTED -> "Supported"
-            Support.UNTESTED -> if (family == Family.A7XX_LOW) "Experimental: its drivers are test builds"
+            Support.UNTESTED -> if (family == Family.MALI) "Experimental (Mali): the runtime draws with software Vulkan"
+                else if (family == Family.A7XX_LOW) "Experimental: its drivers are test builds"
                 else "Outside tested hardware (Adreno 650, 725 and newer): it may not run"
             Support.UNSUPPORTED -> "Not supported: DroidDeck needs an Adreno (Snapdragon) GPU"
         }
@@ -64,7 +68,7 @@ data class GpuInfo(
     /** [supportText] in the app's language. */
     fun supportText(context: Context): String = context.getString(when (support) {
         Support.TESTED -> R.string.gpuinfo_supported
-        Support.UNTESTED -> if (family == Family.A7XX_LOW) R.string.gpuinfo_experimental else R.string.gpuinfo_below_tested
+        Support.UNTESTED -> if (family == Family.MALI) R.string.gpuinfo_mali else if (family == Family.A7XX_LOW) R.string.gpuinfo_experimental else R.string.gpuinfo_below_tested
         Support.UNSUPPORTED -> R.string.gpuinfo_unsupported
     })
 
@@ -76,7 +80,8 @@ data class GpuInfo(
         private const val UNNAMED = "this GPU"
 
         fun detect(): GpuInfo {
-            val adreno = File("/sys/class/kgsl/kgsl-3d0").exists() || File("/vendor/lib64/hw/vulkan.adreno.so").exists()
+            val adreno = isAdreno()
+            val mali = isMali()
             val raw = listOf("/sys/class/kgsl/kgsl-3d0/gpu_model", "/sys/class/kgsl/kgsl-3d0/gpu_chipid")
                 .firstNotNullOfOrNull { FileUtils.readString(File(it))?.trim()?.takeIf(String::isNotEmpty) }
             // Where vendors put the chip's model, named when it is known: "Snapdragon 8 Gen 2 (QCS8550)".
@@ -94,15 +99,30 @@ data class GpuInfo(
                 fromPlatform > 0 -> "platform"
                 else -> ""
             }
-            val family = familyOf(adreno, model)
+            val family = familyOf(adreno, model, mali)
             val samsung = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
             return GpuInfo(
-                name = if (!adreno) Build.HARDWARE.ifBlank { UNNAMED } else if (model > 0) "Adreno $model" else "Adreno",
+                name = when {
+                    mali -> "Mali" + Build.HARDWARE.ifBlank { "" }.let { if (it.isEmpty()) "" else " ($it)" }
+                    !adreno -> Build.HARDWARE.ifBlank { UNNAMED }
+                    model > 0 -> "Adreno $model"
+                    else -> "Adreno"
+                },
                 model = model, family = family, soc = soc,
                 oneUi8Gen2 = samsung && model == 740,
                 kgslName = raw.orEmpty(), modelSource = source,
             )
         }
+
+        /** Adreno is recognised by what only Qualcomm's stack has. */
+        internal fun isAdreno(): Boolean =
+            File("/sys/class/kgsl/kgsl-3d0").exists() || File("/vendor/lib64/hw/vulkan.adreno.so").exists()
+
+        /** A Mali GPU: the vendor's user-space driver at its usual paths (MTK, Exynos). */
+        internal fun isMali(): Boolean =
+            File("/vendor/lib64/egl/libGLES_mali.so").exists() ||
+                File("/vendor/lib64/hw/vulkan.mali.so").exists() ||
+                File("/vendor/lib/egl/libGLES_mali.so").exists()
 
         private fun threeDigits(text: String): Int = Regex("""(\d{3})""").find(text)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 
@@ -122,7 +142,8 @@ data class GpuInfo(
             ""
         }
 
-        internal fun familyOf(adreno: Boolean, model: Int): Family = when {
+        internal fun familyOf(adreno: Boolean, model: Int, mali: Boolean = false): Family = when {
+            mali -> Family.MALI
             !adreno -> Family.NOT_ADRENO
             model == 0 -> Family.ADRENO_UNKNOWN
             model >= 800 -> Family.A8XX

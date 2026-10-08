@@ -15,8 +15,16 @@ import java.io.File
  * vendor's own Vulkan driver at its usual path.
  */
 object DeviceSupport {
+    object DeviceSupport {
     fun adreno(): Boolean =
         File("/sys/class/kgsl/kgsl-3d0").exists() || File("/vendor/lib64/hw/vulkan.adreno.so").exists()
+
+    /** Mali (MTK/Exynos): this fork lets it through on the runtime's software Vulkan. */
+    fun mali(): Boolean =
+        File("/vendor/lib64/egl/libGLES_mali.so").exists() || File("/vendor/lib64/hw/vulkan.mali.so").exists()
+
+    /** Whether a session has any hope here: Adreno, or Mali on software Vulkan. */
+    fun supported(): Boolean = adreno() || mali()
 
     /** The chip as the device names it, for the card that explains the refusal. */
     fun gpuName(context: Context): String {

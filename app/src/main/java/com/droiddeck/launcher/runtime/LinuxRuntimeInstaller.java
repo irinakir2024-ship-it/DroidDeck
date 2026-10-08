@@ -39,9 +39,9 @@ import java.util.concurrent.CountDownLatch;
 public final class LinuxRuntimeInstaller {
     private static final String TAG = "LinuxRuntimeInstaller";
 
-    /** Catalog row, beside the other component catalogs in winlator-contents. */
+    /** Catalog row, beside the other component catalogs in winlator-contents. Fork: Mali runtime. */
     public static final String CATALOG_URL =
-            "https://raw.githubusercontent.com/The412Banner/winlator-contents/main/linuxfs.json";
+            "https://raw.githubusercontent.com/irinakir2024-ship-it/winlator-contents/main/linuxfs.json";
 
     private static final String VERSION_FILE = ".version";
 
