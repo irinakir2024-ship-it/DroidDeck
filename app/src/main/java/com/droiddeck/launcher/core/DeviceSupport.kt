@@ -15,7 +15,6 @@ import java.io.File
  * vendor's own Vulkan driver at its usual path.
  */
 object DeviceSupport {
-    object DeviceSupport {
     fun adreno(): Boolean =
         File("/sys/class/kgsl/kgsl-3d0").exists() || File("/vendor/lib64/hw/vulkan.adreno.so").exists()
 
